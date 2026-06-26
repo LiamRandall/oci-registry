@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: fmt · clippy · test · build · oras-e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - run: rustup target add wasm32-wasip2
+      - run: rustup component add rustfmt clippy
+
+      - name: Setup wash
+        uses: wasmCloud/setup-wash-action@main
+        with:
+          wash-version: v2.2.1
+
+      - name: Install oras
+        uses: oras-project/setup-oras@v1
+        with:
+          version: 1.3.0
+
+      - name: fmt
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: unit tests
+        run: cargo test --workspace
+
+      - name: build component
+        run: cargo build --target wasm32-wasip2 --release
+
+      # The registry is a pure reactor (no service sidecar), so wash dev works
+      # in the headless runner — this is a hard gate, not informational.
+      - name: integration (wash dev + oras push/pull)
+        run: bash tests/integration.sh

@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  test:
+    # Re-run the full CI gate. Nothing publishes if it fails.
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish component to GHCR
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: rustup target add wasm32-wasip2
+
+      - name: Setup wash
+        uses: wasmCloud/setup-wash-action@main
+        with:
+          wash-version: v2.2.1
+
+      - name: Build component
+        run: cargo build --target wasm32-wasip2 --release
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Push to GHCR
+        id: push
+        env:
+          REF_TAG: ${{ github.ref_name }}
+          WASM: target/wasm32-wasip2/release/oci_registry.wasm
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${{ github.repository_owner }}/oci-registry"
+          IMAGE="${IMAGE,,}"  # GHCR requires lowercase paths
+          digest=""
+          # Strip a leading 'v' from the tag for the semver image tag.
+          VERSION="${REF_TAG#v}"
+          for tag in latest "$VERSION"; do
+            echo ">> wash oci push $IMAGE:$tag"
+            out=$(wash oci push --output json "$IMAGE:$tag" "$WASM")
+            digest=$(echo "$out" | jq -r '.data.digest // .digest // empty')
+            echo "   pushed $IMAGE:$tag @ ${digest:-unknown}"
+          done
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Attest provenance
+        if: steps.push.outputs.digest != ''
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.push.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  release:
+    name: Cut GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build component (attach to release)
+        run: |
+          rustup target add wasm32-wasip2
+          cargo build --target wasm32-wasip2 --release
+          cp target/wasm32-wasip2/release/oci_registry.wasm ./oci_registry-${{ github.ref_name }}.wasm
+
+      - name: Generate notes
+        id: notes
+        run: |
+          prev=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || echo "")
+          {
+            echo "body<<EOF"
+            echo "## What changed"
+            echo
+            if [ -n "$prev" ]; then
+              git log --pretty='format:- %s (%h)' "$prev..${{ github.ref_name }}"
+            else
+              git log --pretty='format:- %s (%h)'
+            fi
+            echo; echo
+            echo "## Pull"
+            echo '```sh'
+            owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+            echo "wash oci pull ghcr.io/$owner/oci-registry:${{ github.ref_name }}"
+            echo '```'
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: "oci-registry ${{ github.ref_name }}"
+          body: ${{ steps.notes.outputs.body }}
+          files: oci_registry-${{ github.ref_name }}.wasm
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
