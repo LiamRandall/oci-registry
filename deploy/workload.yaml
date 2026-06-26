@@ -37,15 +37,19 @@ spec:
       config:
         host: oci-registry.localhost
 
-  # Durable, content-addressed storage on the local disk. Change `path` to wherever
-  # you want the registry's blobs/manifests to live; the directory is created on
-  # first use. Swap for `ephemeral: {}` (see the volume note below) if you don't
-  # need images to survive a workload restart.
+  # Durable, content-addressed storage on the local disk. Change `path` to
+  # wherever you want the registry's blobs/manifests to live. The directory must
+  # already exist and be writable by the daemon — the runtime does NOT create it
+  # (it fails to start with "HostPath volume ... does not exist" otherwise). On
+  # macOS Desktop a home-dir path works without sudo; on Linux/Control the
+  # /var/lib path below is conventional. `make deploy` creates the dir for you.
   volumes:
     - name: data
       hostPath:
+        # macOS example: /Users/<you>/.cosmonic/oci-registry-data
         path: /var/lib/cosmonic/oci-registry
-    # Alternative — lifetime is the workload's, not persisted across restarts:
+    # Alternative — lifetime is the workload's, not persisted across restarts,
+    # and needs no pre-created directory:
     # - name: data
     #   ephemeral: {}
 

@@ -44,6 +44,12 @@ stats: build ## Print the component wasm size
 push: build ## Push the component to $(REGISTRY) (override REGISTRY=...)
 	wash oci push --insecure $(REGISTRY)/oci-registry:dev $(WASM)
 
+deploy: ## Deploy the Workload to a running Cosmonic Desktop (pulls from GHCR)
+	bash tools/deploy.sh
+
+undeploy: ## Remove the Workload from Cosmonic Desktop (keeps on-disk data)
+	bash tools/undeploy.sh
+
 # ----- ergonomics ------------------------------------------------------------
 
 fmt: ## cargo fmt

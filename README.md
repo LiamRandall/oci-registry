@@ -94,16 +94,21 @@ Errors use the spec envelope: `{"errors":[{"code","message"}]}`.
 
 ## Deploy on Cosmonic Desktop
 
-The component publishes to GHCR on tagged release. Deploy the
-[`deploy/workload.yaml`](deploy/workload.yaml) Workload
-(`runtime.wasmcloud.dev/v1alpha1`, portable to Cosmonic Control):
+The component publishes to GHCR on tagged release. The deployment artifact is
+[`deploy/workload.yaml`](deploy/workload.yaml)
+(`runtime.wasmcloud.dev/v1alpha1`, portable to Cosmonic Control).
+
+The easiest path — `make deploy` creates the storage directory, applies the
+Workload, waits for it to run, and prints how to reach it:
 
 ```sh
-# via the Cosmonic Desktop daemon API (unix socket)
-SOCK="$HOME/Library/Application Support/Cosmonic/cosmonicd.sock"
-curl --unix-socket "$SOCK" -X POST http://d/v1/workloads \
-     -H 'content-type: application/yaml' --data-binary @deploy/workload.yaml
+make deploy        # pulls ghcr.io/liamrandall/oci-registry, data in ~/.cosmonic/oci-registry-data
+make undeploy      # remove it (on-disk data preserved)
 ```
+
+Under the hood it POSTs to the Cosmonic Desktop daemon's unix socket
+(`/v1/workloads`, JSON). The daemon pulls the image, pins it by digest, mounts
+the `hostPath` volume, and starts the reactor.
 
 Once running, the host's HTTP ingress routes by `Host` header:
 
