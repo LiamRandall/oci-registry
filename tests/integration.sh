@@ -41,6 +41,8 @@ echo ">> building component"
 
 if [[ "$BOOT" == "1" ]]; then
   echo ">> booting wash dev"
+  # wash dev requires the hostPath volume (.wash/config.yaml) to pre-exist.
+  mkdir -p "$ROOT/.cache/registry-data"
   ( cd "$ROOT/components/registry" && wash dev --non-interactive >"$TMP/dev.log" 2>&1 ) &
   DEV_PID=$!
 fi

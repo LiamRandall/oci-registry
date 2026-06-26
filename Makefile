@@ -33,6 +33,7 @@ test-integration: build ## Boot wash dev and exercise the live registry with ora
 # ----- dev -------------------------------------------------------------------
 
 dev: build ## Run the registry under wash dev at $(DEV_ADDR)
+	mkdir -p .cache/registry-data
 	cd components/registry && wash dev
 
 stats: build ## Print the component wasm size
