@@ -7,7 +7,7 @@
 
 A complete, dependency-free container/artifact registry for local development —
 push and pull with `wash`, `oras`, `docker`, or `crane`. It is one Rust
-WebAssembly component, no wadm, no capability providers, no database. The whole
+WebAssembly component without a database. The whole
 thing is ~360 KB of wasm.
 
 ## What it is
